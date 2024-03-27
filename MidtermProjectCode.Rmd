@@ -1,0 +1,388 @@
+---
+title: "Midterm Project"
+author: "Aidan Matthai, Junior Data Analyst"
+date: "2024-03-11"
+output:
+  html_document:
+    css: styles.css
+  word_document: default
+---
+
+# Golden State Warriors Shot Location Data Visualization
+
+Within this report, I will be showing how the Golden State Warriors shot location has changed over the past twenty years with the use various visualizations.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+suppressPackageStartupMessages(library(dplyr))
+# Load required packages
+library(dplyr)
+library(nbastatR)
+library(ggplot2)
+library(hexbin)
+library(grid)
+library(jpeg)
+library(png)
+library(gganimate)
+library(RColorBrewer)
+```
+
+```{r, include=FALSE}
+# Install nbastatR
+library(devtools)
+devtools::install_github("abresler/nbastatR")
+```
+
+### Section 1: Golden State Warriors Shot Location Over Last 20 Years
+
+```{r, eval=FALSE, include=FALSE, warning=FALSE}
+Sys.setenv("VROOM_CONNECTION_SIZE" = 1000000) # Set the connection buffer size to 1,000,000
+
+# Get shot location data from 2004-2023 and create a dataframe for the Warriors
+
+# Initialize an empty list to store shot data
+shot_data_list <- list()
+
+# Iterate through each season from 2004 to 2023
+for (year in 2004:2023) {
+  # Retrieve shot data for the Golden State Warriors for the current season
+  shot_data <- teams_shots(teams = "Golden State Warriors", seasons = year)
+  
+  # Add shot data to the list
+  shot_data_list[[as.character(year)]] <- shot_data
+}
+
+# Combine all shot data into a single dataframe
+all_shot_data <- do.call(rbind, shot_data_list)
+
+# Write the shot data to a CSV file
+write.csv(all_shot_data, "combined_shot_data.csv", row.names = FALSE)
+```
+
+```{r, echo =FALSE, warning=FALSE}
+# Read the combined shot data from the CSV file
+all_shot_data <- read.csv("combined_shot_data.csv")
+```
+
+```{r, echo=FALSE, warning = FALSE}
+# Create individual shot charts from 2004-2023 (display first and last seasons)
+
+# Set the file path to the downloaded image
+file_path <- "nba_court.jpg"
+
+# Read the JPEG image using the appropriate function
+court <- rasterGrob(readJPEG(file_path), width = unit(1, "npc"), height = unit(1, "npc"))
+
+# Read the PNG image of the Warriors logo
+logo_img <- readPNG("warriors_logo.png", native = TRUE) 
+
+# Create a list to store shot charts for each year
+shot_charts <- list()
+
+# Loop through seasons from 2004 to 2023
+for (year in 2004:2023) {
+  # Filter shot data for the current year
+  all_shots_year <- all_shot_data %>%
+    filter(yearSeason == year)
+  
+  # Create shot chart for the current year
+  shot_chart <- ggplot(all_shots_year, aes(x = locationX, y = locationY)) +
+    annotation_custom(court, xmin = -250, xmax = 250, ymin = -50, ymax = 420) +
+    annotation_raster(logo_img, xmin = 97, xmax = 275, ymin = 300, ymax = 400) +
+    geom_point(aes(color = typeEvent), alpha = 0.25) +
+    labs(color = "Shot Result", x = "", y = "") +
+    scale_color_manual(values = c("#008000", "#FF6347")) +
+    ggtitle(label = paste("Warriors Shot Chart for", year-1, "-", year, "Season" )) +
+    ylim(-50, 420) +
+    xlim(250, -250) +
+    theme(axis.ticks = element_blank(), axis.text = element_blank(), plot.title = element_text(hjust = 0.5),
+          panel.grid = element_blank(), panel.background = element_rect(fill = "#1D428A", color = "#FFC72C", size =           3), text = element_text(family = "Georgia")) +
+    coord_fixed() +
+    guides(color = guide_legend(override.aes = list(alpha = 1)))
+
+  # Store the shot chart in the list
+  shot_charts[[year - 2003]] <- shot_chart
+}
+
+```
+
+```{r, echo=FALSE, warning=FALSE}
+# Create individual shot charts from 2004-2023 (hexbins, display first and last seasons)
+
+# Create a list to store shot charts for each year
+shot_charts_hex <- list()
+
+# Read the PNG image of the Warriors logo
+logo_img <- readPNG("warriors_logo.png", native = TRUE) 
+
+# Define the Color Brewer palette in reverse order
+palette <- rev(brewer.pal(n = 20, name = "Spectral"))  # Spectral palette in reverse order
+
+# Create a custom color scale with Color Brewer palette
+custom_color_scale <- scale_fill_gradientn(colors = palette, trans = "sqrt")
+
+# Loop through seasons from 2004 to 2023
+for (year in 2004:2023) {
+  # Filter shot data for the current year
+  all_shots_year <- all_shot_data %>%
+    filter(yearSeason == year)
+  
+  # Create shot chart for the current year
+  shot_chart <- ggplot(all_shots_year, aes(x = locationX, y = locationY)) +
+    annotation_custom(court, xmin = -250, xmax = 250, ymin = -50, ymax = 420) +
+    annotation_raster(logo_img, xmin = 97, xmax = 275, ymin = 300, ymax = 400) +
+    stat_binhex(bins = 15, alpha = 0.8) +
+    custom_color_scale +
+    labs(color = "Shot Result", x = "", y = "", fill = "Count") +
+    ggtitle(label = paste("Warriors Shot Chart for ", year-1, "-", year, " Season", sep = "")) +
+    ylim(-50, 420) +
+    xlim(250, -250) +
+    theme(axis.ticks = element_blank(), axis.text = element_blank(), plot.title = element_text(hjust = 0.5),
+          panel.grid = element_blank(), panel.background = element_rect(fill = "#1D428A", color = "#FFC72C",            size = 3), text = element_text(family = "Georgia")) + 
+    coord_fixed()
+  
+  # Store the shot chart in the list
+  shot_charts_hex[[year - 2003]] <- shot_chart
+}
+```
+
+``` {r, echo = FALSE, warning = FALSE}
+# display 2003-04 season
+shot_charts[[1]]
+shot_charts_hex[[1]]
+```
+
+### 2003-04 Season
+- High frequency of mid-range shots and layups.
+- 3-pointers and mid-range shots are attempted at similar rates.
+- Most 3-point shots are taken close to the line.
+
+``` {r, echo = FALSE, warning = FALSE}
+# display 2022-23 season
+shot_charts[[20]]
+shot_charts_hex[[20]]
+```
+
+### 2022-23 Season
+- High frequency of 3-point shots and layups.
+- 3-pointers are attempted at higher rates than mid-range shots.
+- 3-pointers attempted from further out.
+- Shots attempted near rim (layups and dunks) are made more compared to 2003-04 Season.
+
+```{r, warning=FALSE, include=FALSE, eval = FALSE}
+# Animate shot charts from 2004-2023
+
+# Create shot chart for all years
+shot_chart_all_years <- ggplot(all_shot_data, aes(x = locationX, y = locationY)) +
+  annotation_custom(court, xmin = -250, xmax = 250, ymin = -50, ymax = 420) +
+  annotation_raster(logo_img, xmin = 70, xmax = 275, ymin = 300, ymax = 400) +
+  geom_point(aes(color = typeEvent), alpha = 0.2, size = 2) +
+  labs(color = "Shot Result", x = "", y = "") +
+  scale_color_manual(values = c("#008000", "#FF6347")) +
+  ylim(-50, 420) +
+  xlim(250, -250) +
+  theme(axis.ticks = element_blank(), axis.text = element_blank(), plot.title = element_text(hjust = 0.5),
+        panel.grid = element_blank(), panel.background = element_rect(fill = "#1D428A", color = "#FFC72C",            size = 3), text = element_text(family = "Georgia")) + 
+  coord_fixed() +
+  transition_time(yearSeason) +  # Transition by year
+  guides(color = guide_legend(override.aes = list(alpha = 1))) +
+  labs(title = "Warriors Shot Chart for {frame_time-1} - {frame_time} Season") + 
+  ease_aes('linear')  # Transition style
+
+# Render the animation
+shot_chart_animation <- animate(shot_chart_all_years, nframes = 20, fps = 1, width = 500, height = 470)
+
+# Save the animation as a GIF
+anim_save("shot_chart_animation.gif", shot_chart_animation)
+```
+
+![](shot_chart_animation.gif)
+
+### Evolution of Shot Charts for Past 20 Seasons
+- Shot location is distributed more evenly in 2000s.
+- Shot location shifts away from the mid-range and towards 3-pointers/near the rim in 2010s.
+- By the 2023 season, mid-range has a significantly less important role on the Warriors.
+
+### Further Reading
+The first two shot charts display the location of every shot taken by the Warriors from the 2003-04 and 2022-23 season, respectively. Each dot is colored either red (missed shot) or green (made shot). Looking at the shot chart from 2003-04, mid-range shots are quite prevalent, especially in the left and right corners. As expected, there is a high frequency of shots taken near the rim as well. Overall, it appears that mid-range shots were attempted at similar frequencies as three-point shots, as seen in the density of shots.
+
+Examining the shot chart from the last season in 2022-23, there is a salient difference in shots. Most notably, the three-point shot nearly eliminates the mid-range. As seen with the heavy overlapping of shot locations from beyond the arc and near the rim, the Warriors (and all other teams in the NBA) have changed their offensive strategy to taking high-efficiency shots. To maximize scoring potential, the Warriors attempt three-point shots at high rates and utilize the paint area for close-range two-point field goals. The shooting ability of the Warriors has improved, with three-pointers being taken more frequently and successfully from further distances than in years past.
+
+The other style shot chart utilizes hexagons to exhibit the number of shots attempted in all areas of the court. Cool/darker shades indicate fewer shots attempted, while warm/lighter shades indicate more shots attempted in that area. Although it does not convey whether or not the field-goals are made, it better shows how often shots are taken in relation to other spots on the court.
+
+In the 2003-04 season, there is a relatively even distribution of where shots are attempted between mid-range and three-pointers. However, the hexagonal shot chart for the recent Warriors season tells a different story. The bright green/yellow shades around the arc and in the paint show that three-point shots/layups are utilized far more frequently than mid-range shots, and from increasingly greater distances.
+
+Finally, the animation shows the year-by-year change in shot location using the scatter plot style graph. There is no one specific year where shot location shifts, however, the early 2010s is around the time where the Warriors started to evolve towards high-efficiency shots (i.e., three-point shots and layups/dunks).
+
+Overall, the landscape of shot location for the Warriors has changed greatly over the past 20 years. From frequent mid-range shot attempts to the "three-point revolution," it is evident that the team has found an offensive strategy that has allowed them to adapt and be successful in the modern NBA.
+
+### Section two: Investigating the Four-Point Line
+
+Building on the idea of the "three-point" revolution, I thought it would be interesting to consider the idea of a 4-point line from beyond the current 3-point line. In this section I will first determine the ideal spot for the 4-point line based on NBA shot data from the 2022-2023 season. Then, I will investigate how it would hypothetically affect Golden State Warrior's Stephen Curry and his career point total. 
+
+```{r, include=FALSE, eval=FALSE}
+# Create dataframe for 2023 shots
+
+# Manually list all NBA team names
+team_names <- c( "Atlanta Hawks", "Boston Celtics","Brooklyn Nets", "Charlotte Hornets", "Chicago Bulls", "Cleveland   Cavaliers", "Dallas Mavericks", "Denver Nuggets", "Detroit Pistons", "Golden State Warriors", "Houston Rockets",    "Indiana Pacers", "Los Angeles Clippers", "Los Angeles Lakers", "Memphis Grizzlies", "Miami Heat", "Milwaukee       Bucks", "Minnesota Timberwolves", "New Orleans Pelicans", "New York Knicks", "Oklahoma City Thunder", "Orlando      Magic", "Philadelphia 76ers", "Phoenix Suns", "Portland Trail Blazers", "Sacramento Kings", "San Antonio Spurs",    "Toronto Raptors", "Utah Jazz", "Washington Wizards"
+)
+
+# create tibble with all shots taken in 2022-23 season
+all_shots_2023 <- teams_shots(teams = team_names, seasons = 2023)
+
+# write to csv file
+write.csv(all_shots_2023, "all_shots_2023.csv", row.names = FALSE)
+```
+
+``` {r, echo = FALSE}
+# read in the csv file
+all_shots_2023 <- read.csv("all_shots_2023.csv")
+```
+
+``` {r, echo=FALSE}
+# Find expected shots for 2 and 3 points field goals in 2022-23 Season
+
+# filter to only 2pt field goals
+all_two_pointers_2023 <- all_shots_2023 %>%
+  filter(typeShot == "2PT Field Goal")
+
+# find league wide FG percentage for two-pointers
+league_pct_two <- (nrow(all_two_pointers_2023 %>% filter(isShotMade == TRUE))) / nrow(all_two_pointers_2023)
+
+# filter to only 3pt field goals
+all_three_pointers_2023 <- all_shots_2023 %>%
+  filter(typeShot == "3PT Field Goal")
+
+# find league wide FG percentage for two-pointers 
+league_pct_three <- (nrow(all_three_pointers_2023 %>% filter(isShotMade == TRUE))) / nrow(all_three_pointers_2023)
+  
+# store expected points values
+expected_points_two <- 2 * league_pct_two # 1.095794
+expected_points_three <- 3 * league_pct_three # 1.082137
+
+# create vector that displays stores expected points
+expected_points_2023 <- c(expected_points_two, expected_points_three)
+names(expected_points_2023) <- c("2022-23 Season Expected Points for 2PT Shot", "2022-2023 Season Expected Points for 3PT Shot")
+expected_points_2023
+```
+
+```{r, echo=FALSE}
+# Find expected points for different ranges of the 4-pt shot, from 24-32 ft. 
+
+expected_points_four <- vector()
+
+# moving four point line back a foot starting at 24 ft and seeing how it affects the expected points
+for (distance in 24:34){
+  shots_by_distance <- all_shots_2023 %>% filter(distanceShot >= distance)
+  made_shots <- nrow(shots_by_distance %>% filter(isShotMade == TRUE))
+  shots_attempted <- nrow(shots_by_distance)
+  league_percentage <- made_shots / shots_attempted
+  
+  expected_points_four[distance-23] <- 4 * league_percentage
+}
+
+# naming the vector
+names(expected_points_four) <- c("24 ft", "25 ft", "26 ft", "27 ft", "28 ft", "29 ft", "30 ft", "31 ft", "32 ft", "33 ft", "34 ft")
+
+print("Expected points per 4PT shot from 24-34 ft.")
+expected_points_four
+```
+
+- Four-point line should be between 28 and 29 feet in order to match the expected points per shot for two and three-pointers.
+- It would be more ideal to have the four-point shot be less effective than shots worth less points.
+- 30 feet would be an ideal distance as it makes the four-point shot viable but not overpowered. 
+- For rest of analysis we will assume the four-point line is at 30 feet.
+
+**How would this affect Steph Curry's career point total through the 2023 season?**
+```{r, include=FALSE}
+# Scrape steph curry's total points through the 2022-23 season
+library(rvest)
+library(dplyr)
+
+url <- "https://www.basketball-reference.com/players/c/curryst01.html"
+
+page <- read_html(url)
+
+career_totals <- page %>% 
+  html_nodes("table") %>%
+  .[[5]] %>%
+  html_table
+
+# clean up dataframe to only include season and point totals
+clean_tibble <- career_totals %>% select(Season, PTS) %>%
+  slice(c(-15, -16)) #eliminate current (unfinished) season for which we don't have shot location data from
+
+# store his total career points
+actual_total_points <- sum(clean_tibble$PTS)
+```
+
+```{r, echo=FALSE}
+# Calculate hypothetical points for steph curry
+library(nbastatR)
+
+# using the shot data we have from the warriors, we can filter it down to just steph curry
+steph_curry_all_shots <- all_shot_data %>%
+  filter(idPlayer == 201939)
+
+# add a column to show if his shot is a hypothetical 4-pt shot
+steph_curry_all_shots_4pt <- steph_curry_all_shots %>%
+  mutate(isFourPoint = distanceShot >= 30)
+
+# calculate hypothetical points if 4 point line existed
+hypothetical_points <- actual_total_points -
+  3 * nrow(steph_curry_all_shots %>% filter(typeShot == "3PT Field Goal" & isShotMade == TRUE & distanceShot >= 30)) +
+  4 * nrow(steph_curry_all_shots %>% filter(typeShot == "3PT Field Goal" & isShotMade == TRUE & distanceShot >= 30)) 
+
+print("Actual Career points through 2022-23 Season:")
+actual_total_points
+print("Hypothetical career points through 2022-23 Season with 4 point line:")
+hypothetical_points
+
+paste("Steph Curry's Hypothetical Career point total would increase by ", hypothetical_points - actual_total_points, " points.", " This is an increase of ", round(((hypothetical_points-actual_total_points)/(actual_total_points)*100), digits = 2), "%", sep = "")
+
+```
+
+```{r, echo=FALSE, warning = FALSE}
+# Create a plot showing what the 4pt line would look like, using steph curry's shot data. 
+
+# Create a data frame with coordinates for the 4-point arc
+arc_data <- data.frame(
+  x = seq(-248, 248, length.out = 100), 
+  y = 614.7 - 2 * sqrt(42000 - (seq(100, 400, length.out = 100) - 250)^2)  # Y-coordinates of the arc
+)
+
+# flip y coordinates around
+arc_data$y <- 500 - arc_data$y
+
+# all 4pt shots taken by steph (in front of half-court)
+four_points <- steph_curry_all_shots_4pt %>%
+  filter(isFourPoint == TRUE)
+
+# Calculate the percentage of shots made for 4 points
+percentage_made <- nrow(four_points %>% filter(isShotMade == TRUE)) / nrow(four_points) * 100
+percentage_text <- paste("4-Point FG: ", round(percentage_made, 2), "%", " (", nrow(four_points %>% filter(isShotMade == TRUE)), "/", nrow(four_points), ")", sep = "")
+
+# create shot chart for curry in his career
+curry_career_4pt_shots <- ggplot(four_points, aes(x = locationX, y = locationY)) +
+    annotation_custom(court, xmin = -250, xmax = 250, ymin = -50, ymax = 420)  +
+    annotation_raster(logo_img, xmin = 97, xmax = 275, ymin = 300, ymax = 400) +
+    geom_path(data = arc_data, aes(x = x, y = y), color = "blue", linewidth = 1) +
+    geom_text(aes(x = 0, y = 277, label = "4-Point Line (30 ft)"), color = "blue", size = 3.4, family = "Georgia") +  
+    geom_point(aes(color = typeEvent), alpha = 0.5) +
+    labs(color = "Shot Result", x = "", y = "") +
+    scale_color_manual(values = c("#008000", "#FF6347")) +
+    ggtitle(label = paste("Stephen Curry's Career 4 point Shots (Hypothetical)")) +
+    ylim(-50, 420) +
+    xlim(250, -250) +
+    theme(axis.ticks = element_blank(), axis.text = element_blank(), plot.title = element_text(hjust = 0.5),
+          panel.grid = element_blank(), panel.background = element_rect(fill = "#1D428A", color = "#FFC72C",           size = 3), text = element_text(family = "Georgia")) +
+    coord_fixed() +
+    geom_text(x = 0, y = 252, label = percentage_text, color = "#008000", size = 3.8, family = "Georgia")
+
+curry_career_4pt_shots
+```
+
+- Steph Curry has made 145 shots from 30 feet and beyond, raising his hypothetical total career point total by 145. 
+- His hypothetical 4-point field goal percentage is 28.32%
+- If a four-point line existed, Steph Curry would likely have attempted (and made) significantly more from this range. 
+- His expected points for four-point shots is 1.13 points, which is indicative of his strong shooting abilities.
